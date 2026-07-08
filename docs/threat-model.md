@@ -1,72 +1,72 @@
 # Threat Model
 **Name:** Althea Barbato
 
-Using a simplified STRIDE approach to identify threats against `webserver01`.
+STRIDE breakdown for webserver01. Not a super complex setup but worth thinking through.
 
 ---
 
 ## What I'm protecting
 
-- The server itself (Ubuntu 20.04, Oracle Cloud)
-- The web app running on nginx (port 80)
-- The monitoring stack (Prometheus, Grafana, Uptime Kuma)
+- The server (Ubuntu 20.04, Oracle Cloud free tier)
+- nginx web app on port 80
+- The monitoring stack from Lab 3 (Prometheus, Grafana, Uptime Kuma)
 - SSH access
-- Data at rest: logs, Prometheus time series, Grafana data
+- Logs, Prometheus data, Grafana data
 
 ---
 
-## Threat actors
+## Who would even attack this
 
-**Script kiddies and automated scanners** most likely threat. The internet constantly scans for open ports, default credentials, and known CVEs. No targeted intent, just opportunistic.
+**Automated scanners** most realistic threat. Bots constantly scan the internet for open ports and default creds. Not personal, just opportunistic.
 
-**Credential stuffers** try username/password combos leaked from other services. Less relevant here since password auth is disabled, but they still show up in the logs.
+**Credential stuffers** try leaked username/password combos from other breaches. Not super relevant here since password auth is off, but they show up in the logs anyway.
 
-**Targeted attacker** someone specifically after this server. Unlikely since it's a class project with no valuable data, but useful as the worst case for modeling.
+**Targeted attacker** someone actually after this server specifically. Pretty unlikely since there's nothing valuable on it, but good to think through worst case.
 
 ---
 
-## STRIDE analysis
+## STRIDE
 
 ### Spoofing
-**Threat:** attacker spoofs SSH connections or pretends to be a legitimate user.
-**Mitigation:** key-only auth means credentials can't be stolen via phishing or credential reuse. SSH protocol 2 only (SSHv1 had known MITM issues).
-**Residual risk:** if the private key file on my laptop gets compromised, identity spoofing is possible.
+Someone pretending to be me to get SSH access.
+Key-only auth helps a lot here since there's no password to steal. SSHv1 is disabled.
+Still risky if my laptop gets compromised and someone grabs the key file.
 
 ### Tampering
-**Threat:** attacker changes server files, configs, or monitoring data.
-**Mitigation:** auditd watches /etc/passwd, /etc/shadow, /etc/ssh/sshd_config, /etc/sudoers for write or attribute changes. UFW and iptables block unauthorized network access.
-**Residual risk:** auditd logs could be cleared by root. No off-server log shipping means audit logs only exist on the compromised machine if it gets fully rooted.
+Someone changing files or configs on the server.
+auditd is watching the sensitive ones now (/etc/passwd, /etc/shadow, sshd_config, sudoers). UFW and iptables block unauthorized access.
+If someone got root they could clear the audit logs before anyone noticed.
 
 ### Repudiation
-**Threat:** actions on the server can't be traced back to who did them.
-**Mitigation:** auditd logs commands from non-root users with timestamps. Auth events go to /var/log/auth.log. Both feed into the monitoring stack.
-**Residual risk:** logs aren't shipped off-server, so a root compromise could wipe them.
+Not being able to trace who did what.
+auditd logs commands from non-root users with timestamps. Auth events in auth.log.
+Logs are only on the server so if someone rooted it they could wipe them.
 
 ### Information disclosure
-**Threat:** sensitive server info exposed to the public.
-**Mitigation:** Grafana requires login. kernel.dmesg_restrict=1 hides kernel messages from non-root users. node_exporter exposes metrics but not credentials.
-**Residual risk:** Prometheus /metrics and /api/v1/query are publicly accessible with no auth. Anyone can learn CPU, memory, disk, and process state of the server. Not credentials but more info than needed.
+Server info leaking to people who shouldn't have it.
+Grafana requires a login. kernel.dmesg_restrict=1 hides kernel info from non-root.
+Prometheus is still open to anyone on port 9090. CPU, memory, disk, process state all accessible with no auth.
 
 ### Denial of Service
-**Threat:** server gets overwhelmed and goes down.
-**Mitigation:** tcp_syncookies=1 protects against SYN floods. Fail2ban bans IPs after 5 failed attempts within 10 minutes, limiting brute force volume.
-**Residual risk:** a volumetric DDoS from many IPs at once would overwhelm the Oracle connection. No CDN or DDoS protection in place.
+Server getting flooded and going down.
+tcp_syncookies=1 handles SYN floods. Fail2ban cuts off IPs that hammer SSH.
+A real distributed attack from a ton of IPs at once would overwhelm it. No CDN or DDoS protection.
 
 ### Elevation of privilege
-**Threat:** attacker gets root from an unprivileged position.
-**Mitigation:** fs.suid_dumpable=0 prevents SUID binary core dumps. sudoers is audit-watched. No extra SUID binaries added beyond Ubuntu defaults.
-**Residual risk:** kernel exploits could bypass all of this. Unattended-upgrades keeps the kernel patched but there's always a gap between disclosure and patch.
+Getting from regular user to root.
+fs.suid_dumpable=0 blocks a specific path for that. Sudoers is audit-watched. No extra SUID binaries added.
+Kernel exploits could still work. Unattended-upgrades patches things but there's always a window.
 
 ---
 
-## Attack surfaces by port
+## Open ports and their risk
 
 | Port | Service | Exposure | Risk |
 |---|---|---|---|
-| 22 | SSH | 0.0.0.0/0 | Medium (key-only, fail2ban active) |
+| 22 | SSH | 0.0.0.0/0 | Medium (key-only, fail2ban running) |
 | 80 | nginx | 0.0.0.0/0 | Low (static page, no user input) |
-| 9090 | Prometheus | 0.0.0.0/0 | Low-Medium (no auth, exposes metrics) |
-| 3000 | Grafana | 0.0.0.0/0 | Low (login required, non-default password) |
+| 9090 | Prometheus | 0.0.0.0/0 | Low-Medium (no auth at all) |
+| 3000 | Grafana | 0.0.0.0/0 | Low (login required) |
 | 3001 | Uptime Kuma | 0.0.0.0/0 | Low (login required) |
-| 9100 | node_exporter | 0.0.0.0/0 | Low (read-only metrics) |
-| 9113 | nginx_exporter | 0.0.0.0/0 | Low (read-only metrics) |
+| 9100 | node_exporter | 0.0.0.0/0 | Low (read only) |
+| 9113 | nginx_exporter | 0.0.0.0/0 | Low (read only) |
