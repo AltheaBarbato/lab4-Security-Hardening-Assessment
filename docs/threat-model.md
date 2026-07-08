@@ -3,7 +3,7 @@
 
 STRIDE breakdown for webserver01. Not a super complex setup but worth thinking through.
 
----
+
 
 ## What I'm protecting
 
@@ -13,7 +13,7 @@ STRIDE breakdown for webserver01. Not a super complex setup but worth thinking t
 - SSH access
 - Logs, Prometheus data, Grafana data
 
----
+
 
 ## Who would even attack this
 
@@ -23,7 +23,7 @@ STRIDE breakdown for webserver01. Not a super complex setup but worth thinking t
 
 **Targeted attacker** someone actually after this server specifically. Pretty unlikely since there's nothing valuable on it, but good to think through worst case.
 
----
+
 
 ## STRIDE
 
@@ -57,7 +57,7 @@ Getting from regular user to root.
 fs.suid_dumpable=0 blocks a specific path for that. Sudoers is audit-watched. No extra SUID binaries added.
 Kernel exploits could still work. Unattended-upgrades patches things but there's always a window.
 
----
+
 
 ## Open ports and their risk
 
