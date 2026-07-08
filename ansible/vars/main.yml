@@ -1,0 +1,30 @@
+---
+server_ip: "163.192.117.50"
+admin_user: sysadmin
+
+# SSH hardening
+ssh_port: 22
+ssh_permit_root_login: "no"
+ssh_password_auth: "no"
+ssh_max_auth_tries: 3
+ssh_client_alive_interval: 300
+ssh_client_alive_count_max: 2
+
+# Fail2ban
+fail2ban_maxretry: 5
+fail2ban_bantime: 3600
+fail2ban_findtime: 600
+fail2ban_ignoreip:
+  - "172.59.190.159"
+  - "208.59.56.247"
+
+# Allowed ports
+allowed_ports:
+  - 22
+  - 80
+  - 443
+  - 9090
+  - 3000
+  - 3001
+  - 9100
+  - 9113

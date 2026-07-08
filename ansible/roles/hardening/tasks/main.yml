@@ -1,0 +1,137 @@
+---
+- name: Ensure auditd is installed
+  shell: DEBIAN_FRONTEND=noninteractive apt-get install -y -qq auditd audispd-plugins
+  register: auditd_install
+  changed_when: "'Setting up' in auditd_install.stdout"
+
+- name: Enable and start auditd
+  systemd:
+    name: auditd
+    enabled: true
+    state: started
+
+- name: Add audit rules for sensitive files
+  copy:
+    dest: /etc/audit/rules.d/hardening.rules
+    content: |
+      # watch passwd and shadow for changes
+      -w /etc/passwd -p wa -k identity
+      -w /etc/shadow -p wa -k identity
+      # watch SSH config
+      -w /etc/ssh/sshd_config -p wa -k sshd
+      # watch sudoers
+      -w /etc/sudoers -p wa -k sudoers
+      # log all failed login attempts via execve
+      -a always,exit -F arch=b64 -S execve -F auid>=1000 -F auid!=4294967295 -k user_commands
+    owner: root
+    group: root
+    mode: "0640"
+  notify: reload auditd
+
+- name: Tighten SSH config
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+  loop:
+    - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin no' }
+    - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+    - { regexp: '^#?MaxAuthTries', line: 'MaxAuthTries 3' }
+    - { regexp: '^#?ClientAliveInterval', line: 'ClientAliveInterval 300' }
+    - { regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax 2' }
+    - { regexp: '^#?X11Forwarding', line: 'X11Forwarding no' }
+    - { regexp: '^#?AllowAgentForwarding', line: 'AllowAgentForwarding no' }
+    - { regexp: '^#?PermitEmptyPasswords', line: 'PermitEmptyPasswords no' }
+    - { regexp: '^#?Protocol', line: 'Protocol 2' }
+  notify: restart sshd
+
+- name: Set strict permissions on SSH authorized_keys
+  shell: |
+    for dir in /home/*/; do
+      user=$(basename "$dir")
+      keyfile="$dir/.ssh/authorized_keys"
+      if [[ -f "$keyfile" ]]; then
+        chmod 600 "$keyfile"
+        chown "$user:$user" "$keyfile"
+      fi
+    done
+  changed_when: false
+
+- name: Disable USB storage (not applicable in cloud, adds defense in depth)
+  copy:
+    dest: /etc/modprobe.d/disable-usb-storage.conf
+    content: "install usb-storage /bin/true\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Harden kernel sysctl parameters
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: true
+  loop:
+    - { key: 'net.ipv4.conf.all.rp_filter', value: '1' }
+    - { key: 'net.ipv4.conf.default.rp_filter', value: '1' }
+    - { key: 'net.ipv4.icmp_echo_ignore_broadcasts', value: '1' }
+    - { key: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+    - { key: 'net.ipv4.conf.all.send_redirects', value: '0' }
+    - { key: 'net.ipv4.conf.all.accept_source_route', value: '0' }
+    - { key: 'net.ipv4.tcp_syncookies', value: '1' }
+    - { key: 'kernel.dmesg_restrict', value: '1' }
+    - { key: 'fs.suid_dumpable', value: '0' }
+
+- name: Set password aging policy
+  lineinfile:
+    path: /etc/login.defs
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: '^PASS_MAX_DAYS', line: 'PASS_MAX_DAYS   90' }
+    - { regexp: '^PASS_MIN_DAYS', line: 'PASS_MIN_DAYS   1' }
+    - { regexp: '^PASS_WARN_AGE', line: 'PASS_WARN_AGE   14' }
+
+- name: Ensure unattended-upgrades is installed and configured
+  shell: DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unattended-upgrades
+  register: uu_install
+  changed_when: "'Setting up' in uu_install.stdout"
+
+- name: Enable automatic security updates
+  copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Tighten /tmp permissions
+  mount:
+    path: /tmp
+    src: tmpfs
+    fstype: tmpfs
+    opts: "defaults,noexec,nosuid,nodev,size=512m"
+    state: present
+
+- name: Ensure fail2ban is configured with strict settings
+  copy:
+    dest: /etc/fail2ban/jail.local
+    content: |
+      [DEFAULT]
+      ignoreip = 127.0.0.1/8 {{ fail2ban_ignoreip | join(' ') }}
+      bantime  = {{ fail2ban_bantime }}
+      findtime = {{ fail2ban_findtime }}
+      maxretry = {{ fail2ban_maxretry }}
+
+      [sshd]
+      enabled = true
+      port    = ssh
+      logpath = %(sshd_log)s
+      backend = %(sshd_backend)s
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart fail2ban
