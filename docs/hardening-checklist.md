@@ -1,7 +1,7 @@
 # Hardening Checklist
 **Name:** Althea Barbato
 
-Status of each hardening control on `webserver01` after running `bash deploy.sh`.
+Status of each hardening control on `webserver01`.
 
 | Control | Status | How applied |
 |---|---|---|

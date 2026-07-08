@@ -1,7 +1,7 @@
 # Residual Risk Analysis
 **Name:** Althea Barbato
 
-After applying all remediations in this lab, these are the risks that are still there and why I'm accepting them.
+These are the risks still left after everything in this lab got applied, and why I'm not fixing them right now.
 
 ---
 
