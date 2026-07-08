@@ -1,4 +1,4 @@
-# Lab 4 Security Hardening Assessment
+# Security Hardening Assessment
 **Name:** Althea Barbato
 
 Formal security assessment of `webserver01` (163.192.117.50) built across Labs 1-3. Identifies vulnerabilities, applies remediations via Ansible, and documents the remaining risk.
