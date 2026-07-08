@@ -44,3 +44,4 @@ What's done and what's not on webserver01.
 | Full CIS benchmark | Way out of scope, that's 200+ controls |
 | Tripwire/AIDE | auditd covers the important files |
 | Network segmentation | Single server, nothing to segment |
+
