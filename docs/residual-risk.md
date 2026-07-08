@@ -1,7 +1,7 @@
 # Residual Risk Analysis
 **Name:** Althea Barbato
 
-After applying all remediations in this lab, these are the risks that still exist and why I'm accepting them (or can't fix them given the scope of this class).
+After applying all remediations in this lab, these are the risks that are still there and why I'm accepting them.
 
 ---
 
@@ -9,55 +9,55 @@ After applying all remediations in this lab, these are the risks that still exis
 
 ### Prometheus has no authentication (Accepted)
 
-Prometheus's web UI and API are publicly accessible. Anyone who finds port 9090 can query any metric, see what's running on the server, and check alert state.
+Prometheus's web UI and API are publicly accessible. Anyone who finds port 9090 can query metrics, see what's running on the server, and check alert state without logging in.
 
-**Why I'm accepting this:** Prometheus has no built-in auth mechanism. The real fix is putting nginx in front of it with basic auth and TLS, which is out of scope here. The data it exposes is operational metrics, not credentials or application data. Oracle VCN is the outer network gate.
+**Why I'm accepting this:** Prometheus has no built-in auth. The real fix is putting nginx in front of it with basic auth and TLS, which is out of scope here. The data it exposes is operational metrics, not credentials or app data. Oracle VCN is the only network gate right now.
 
-**What would fix it:** Add a nginx reverse proxy with basic auth in front of :9090 and block direct access to the port via iptables.
+**What would fix it:** nginx reverse proxy with basic auth in front of port 9090, then block direct access to 9090 via iptables.
 
 ---
 
 ### Audit logs are not shipped off-server (Accepted)
 
-auditd logs everything to /var/log/audit/audit.log on the same server. If an attacker got root they could clear or modify these logs before anyone saw them.
+auditd logs everything to /var/log/audit/audit.log on the same server. If an attacker got root they could clear those logs before anyone saw them.
 
-**Why I'm accepting this:** Shipping logs off-server would require setting up a remote syslog server or a cloud logging service, which is out of scope. For a production system this would be unacceptable — auditd is only useful as a forensic tool if the logs are immutable and stored elsewhere.
+**Why I'm accepting this:** Shipping logs off-server needs a remote syslog or cloud logging service, which is out of scope. For a real production system this would be a blocker since audit logs are only useful for forensics if they're somewhere the attacker can't touch.
 
-**What would fix it:** Configure auditd to forward to a remote syslog (rsyslog remote_host directive) or use a service like AWS CloudWatch Logs or Loki with remote write.
+**What would fix it:** Configure rsyslog to forward to a remote host, or use something like Loki with remote write enabled.
 
 ---
 
 ### No DDoS protection (Accepted)
 
-A volumetric attack from many source IPs would overwhelm the server. Fail2ban only bans single IPs, it can't handle a distributed flood.
+A volumetric attack from many IPs at once would overwhelm the server. Fail2ban only bans individual IPs so it can't handle a distributed flood.
 
-**Why I'm accepting this:** This is a free-tier Oracle instance. Real DDoS protection needs a CDN (Cloudflare, AWS Shield) in front of the server, which costs money and is out of scope for a class project.
-
----
-
-### Monitoring ports accessible from any IP (Accepted with note)
-
-Ports 3000, 3001, 9090, 9100, 9113 are open to 0.0.0.0/0 in both UFW and Oracle VCN. This is wider than necessary.
-
-**Why I'm accepting this:** Restricting these to my home IP would break things every time my IP changes (ISPs reassign dynamic IPs). A VPN would be the right fix. Accepted because the data exposed is non-sensitive.
+**Why I'm accepting this:** Free-tier Oracle instance. Real DDoS protection needs a CDN like Cloudflare or AWS Shield in front, which costs money and is out of scope for a class.
 
 ---
 
-### Private key on local machine (Accepted)
+### Monitoring ports open to any IP (Accepted with note)
 
-The SSH private key (lab1-key.pem) lives on my laptop. If the laptop is compromised, an attacker gets server access.
+Ports 3000, 3001, 9090, 9100, 9113 are open to 0.0.0.0/0 in UFW and Oracle VCN. Wider than necessary.
 
-**Why I'm accepting this:** It's a class project with no production data. In a real environment the key would be in a secrets manager (HashiCorp Vault, AWS Secrets Manager) and access would be audited.
+**Why I'm accepting this:** Locking these down to my home IP would break every time my ISP reassigns my IP. A VPN would be the right fix. Accepted because the exposed data isn't sensitive.
 
 ---
 
-## Overall risk posture
+### Private key lives on my laptop (Accepted)
 
-The server is reasonably hardened for its purpose:
-- No password-based SSH login
-- Automated brute-force blocking via fail2ban
-- Audit logging on sensitive files
-- Kernel network hardening applied
-- Automatic security patches
+The SSH private key (lab1-key.pem) is on my local machine. If the laptop got compromised, someone gets server access.
 
-The biggest actual risks are that logs live only on the server and that the monitoring ports are publicly accessible. Neither is a critical issue for a class project on a server with no user data, but both would be blockers in a real deployment.
+**Why I'm accepting this:** Class project, no production data. In a real setup the key would live in a secrets manager like HashiCorp Vault or AWS Secrets Manager with access logging.
+
+---
+
+## Overall posture
+
+The server is reasonably hardened for what it is:
+- No password SSH login
+- Fail2ban blocking brute force
+- Auditd logging changes to sensitive files
+- Kernel network hardening in place
+- Automatic security patches running
+
+The two biggest actual gaps are that logs only live on the server and that monitoring ports are world-accessible. Neither is critical for a class project with no real user data, but both would need to be fixed before running anything in production.
